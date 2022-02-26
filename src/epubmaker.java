@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
-public class main {
+public class epubmaker {
 
 
     public static void main(String[] args) throws Exception {
@@ -13,12 +13,12 @@ public class main {
 //        String currentDir = System.getProperty("user.dir");
 //        System.out.println("Hello world! " + currentDir);
 
-        List input = readFileInList(args[0]);
+        List<String> input = readFileInList(args[0]);
 //        System.out.println(input.get(0));
 
-        List marker = new ArrayList<Integer>();
+        List<Integer> marker = new ArrayList<>();
         for (int i = 0; i < input.size(); i++)
-            if (input.get(i).toString().startsWith("<!--"))
+            if (input.get(i).startsWith("<!--"))
                 marker.add(i);
 
         File toc = new File("toc.ncx");
@@ -31,12 +31,12 @@ public class main {
                 if (!part.createNewFile()) System.out.println(fName + ": file already exists.");
                 FileWriter partWriter = new FileWriter(fName);
 
-                for (int i = 0; i < (int)marker.get(0); i++ )
-                    partWriter.write(input.get(i).toString());
-                for (int i = (int)marker.get(p - 1) + 1; i < (int)marker.get(p); i++ )
-                    partWriter.write(input.get(i).toString());
-                for (int i = (int)marker.get(marker.size() - 1) + 1; i < input.size(); i++ )
-                    partWriter.write(input.get(i).toString());
+                for (int i = 0; i < marker.get(0); i++ )
+                    partWriter.write(input.get(i));
+                for (int i = marker.get(p - 1) + 1; i < marker.get(p); i++ )
+                    partWriter.write(input.get(i));
+                for (int i = marker.get(marker.size() - 1) + 1; i < input.size(); i++ )
+                    partWriter.write(input.get(i));
                 partWriter.close();
                 System.out.println(fName);
             } catch (Exception e) {
