@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="epubmaker:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/epubmaker_jar</output-path>
+    <root id="archive" name="epubmaker.jar">
+      <element id="module-output" name="epubmaker" />
+    </root>
+  </artifact>
+</component>

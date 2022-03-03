@@ -8,6 +8,11 @@ import java.util.*;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 public class EpubMaker {
+    static class Note {
+        public int start;
+        public int end;
+        public String title;
+    }
 
     public static void main(String[] args) {
         if (args.length == 0) {
@@ -16,17 +21,20 @@ public class EpubMaker {
         }
 //        String currentDir = System.getProperty("user.dir");
         String inputDir = args[0];
-        String inputFile = args[0] + "\\main.xhtml";
+        String inputFile = args[0] + "\\main.html";
+        String notesFile = args[0] + "\\notes.html";
         String[] outputDir = new String[3];
         outputDir[0] = args[0] + "_out";
         outputDir[1] = args[0] + "_out\\META-INF";
         outputDir[2] = args[0] + "_out\\OEBPS";
 
         List<String> input = readFileToList(inputFile);
+        List<String> notesInput = new ArrayList<>();
         List<Integer> marker = new ArrayList<>();
         for (int i = 0; i < input.size(); i++)
             if (input.get(i).startsWith("<!--"))
                 marker.add(i);
+        Map<String, Note> noteMarkers = new HashMap<>();
 
         for (int i = 0; i < 3; i++) createDirectory(outputDir[i]);
 
@@ -67,9 +75,9 @@ public class EpubMaker {
 
         String bookTitle = "", bookAuthor = "", bookID = "";
         for (int m = 0; m <= meta; m++) {
-            String s = readMarker(input.get(marker.get(m)));
-            String attribute = s.substring(0, s.indexOf(":")).trim();
-            String value = s.substring(s.indexOf(":") + 1).trim();
+            String s = readMarker(input.get(marker.get(m)), false, marker.get(m) + 1);
+            String attribute = getAttribute(s);
+            String value = getValue(s);
             if (s.isEmpty()) System.out.println("Warning: line " + (m + 1) + ": meta attribute not found");
             else {
                 if (attribute.equalsIgnoreCase("title")) {
@@ -116,7 +124,7 @@ public class EpubMaker {
         if (manifest != null)
             for (File file : manifest) {
                 String filename = file.getName();
-                if (!file.isDirectory() && !filename.equalsIgnoreCase("main.xhtml")) {
+                if (!file.isDirectory() && !extension(filename).equalsIgnoreCase("html")) {
                     boolean mediaRecognized = true;
                     String mediatype = "";
                     switch (extension(filename)) {
@@ -139,26 +147,13 @@ public class EpubMaker {
                     }
                     else
                         System.out.println("Warning: Media type not recognized: " + filename);
-
                 }
 
             }
         for (int i = 1; i < marker.size() - meta - 1; i++) {
             String fName = String.format("%04d", i);
-            content.write("<item id=\"" + fName + "\" href=\"" + fName + ".xhtml\" media-type=\"application/xhtml+xml\"/>");
+            content.write("<item id=\"" + fName + "\" href=\"" + fName + ".html\" media-type=\"application/xhtml+xml\"/>");
         }
-        content.write("</manifest>");
-        content.write("<spine toc=\"ncx\">");
-        for (int i = 1; i < marker.size() - meta - 1; i++) {
-            String fName = String.format("%04d", i);
-            content.write("<itemref idref=\"" + fName + "\"/>");
-        }
-        content.write("</spine>");
-        content.write("<guide>");
-        content.write("<reference type=\"cover\" href=\"0001.xhtml\" title=\"Cover\"/>");
-        content.write("</guide>");
-        content.write("</package>");
-        content.close();
 
         FWriter toc = new FWriter(outputDir[2] + "\\toc.ncx");
         toc.write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>");
@@ -174,12 +169,12 @@ public class EpubMaker {
         toc.write("<navMap>");
         int playOrder = 1;
         for (int p = 1; p < marker.size() - meta - 1; p++) {
-            String chapTitle = readMarker(input.get(marker.get(meta + p)));
+            String chapTitle = readMarker(input.get(marker.get(meta + p)), false, meta + p + 1);
             if (!chapTitle.isEmpty()) {
                 toc.write("<navPoint id=\"toc" + playOrder +
                         "\" playOrder=\"" + playOrder +
                         "\"><navLabel><text>" + chapTitle +
-                        "</text></navLabel><content src=\"" + String.format("%04d", p) + ".xhtml\"/></navPoint>");
+                        "</text></navLabel><content src=\"" + String.format("%04d", p) + ".html\"/></navPoint>");
                 playOrder++;
             }
         }
@@ -187,16 +182,133 @@ public class EpubMaker {
         toc.close();
 
         for (int p = 1; p < marker.size() - meta - 1; p++) {
-            FWriter xhtml = new FWriter(String.format("%s\\%04d.xhtml", outputDir[2], p));
+            FWriter html = new FWriter(String.format("%s\\%04d.html", outputDir[2], p));
+            String noteFile = "", htmlFile = "";
+            FWriter notes = null;
+            List<String> notesUsed = new ArrayList<>();
 
             for (int i = marker.get(meta) + 1; i < marker.get(meta + 1); i++ )
-                xhtml.write(input.get(i));
-            for (int i = marker.get(meta + p) + 1; i < marker.get(meta + p + 1); i++ )
-                xhtml.write(input.get(i));
+                html.write(input.get(i));
+            for (int i = marker.get(meta + p) + 1; i < marker.get(meta + p + 1); i++ ) {
+                String text = input.get(i);
+                int notePos = text.indexOf("<note ");
+                // handle notes, if any
+                if (notePos != -1) {
+                    // initialize the page's notes file and add it to manifest, if not done already
+                    if (notes == null) {
+                        String id = String.format("%04d", p);
+                        htmlFile = id + ".html";
+                        noteFile = "x" + htmlFile;
+                        notes = new FWriter(outputDir[2] + "\\" + noteFile);
+                        for (int j = marker.get(meta) + 1; j < marker.get(meta + 1); j++)
+                            notes.write(input.get(j));
+                        content.write("<item id=\"x" + id + "\" href=\"" + noteFile +
+                                "\" media-type=\"application/xhtml+xml\"/>");
+                    }
+                    // read notes.html and process it, if not done already
+                    if (notesInput.isEmpty()) {
+                        notesInput = readFileToList(notesFile);
+                        int previousNote = -1;
+                        for (int j = 0; j < notesInput.size(); j++) {
+                            if (notesInput.get(j).startsWith("<!--")) {
+                                if (previousNote != -1) {
+                                    String s = readMarker(notesInput.get(previousNote), true, previousNote + 1);
+                                    String label = getAttribute(s);
+                                    Note note = new Note();
+                                    note.start = previousNote; note.end = j; note.title = getValue(s);
+                                    if (label.isEmpty() || note.title.isEmpty()) {
+                                        System.out.println("Note fatal: line " +
+                                                (previousNote + 1) + ": note label or title is empty.");
+                                        System.exit(-7);
+                                    }
+                                    if (noteMarkers.containsKey(label)) {
+                                        System.out.println("Note fatal: line " +
+                                                (j + 1) + ": note label is not unique.");
+                                        System.exit(-7);
+                                    }
+                                    noteMarkers.put(label, note);
+                                }
+                                previousNote = j;
+                            }
+                        }
+                    }
+
+                    int pos = 0;
+                    String output = "";
+                    do {
+                        int noteNumEnd = text.indexOf('>', notePos + 6);
+                        String noteLabel = text.substring(notePos + 6, noteNumEnd).trim();
+                        // write the link part
+                        {
+                            if (noteLabel.isEmpty()) {
+                                System.out.println("Fatal: line " + (i + 1) + ": note label not found.");
+                                System.exit(-7);
+                            }
+                            if (notesUsed.contains(noteLabel)) {
+                                System.out.println("Fatal: line " + (i + 1) + ": note label is not unique.");
+                                System.exit(-7);
+                            }
+                            notesUsed.add(noteLabel);
+                            int noteEnd = text.indexOf("</note>", noteNumEnd + 1);
+                            if (noteEnd == -1) {
+                                System.out.println("Fatal: line " + (i + 1) + ": note tag is not closed.");
+                                System.exit(-7);
+                            }
+                            String noteLink = text.substring(noteNumEnd + 1, noteEnd);
+                            if (noteLink.isEmpty()) {
+                                System.out.println("Fatal: line " + (i + 1) + ": note link is empty.");
+                                System.exit(-7);
+                            }
+                            output += text.substring(pos, notePos) +
+                                    "<a href=\"" + noteFile + "#n" + noteLabel + "\" id=\"r" +
+                                    noteLabel + "\" epub:type=\"noteref\">" + noteLink + "</a>";
+                            pos = noteEnd + 7;
+                        }
+                        // write the note part
+                        Note note = noteMarkers.get(noteLabel);
+                        if (note == null) {
+                            System.out.println("Fatal: line " + (i + 1) +
+                                    ": note with label " + noteLabel + " is not found.");
+                            System.exit(-7);
+                        }
+                        notes.write("<div id=\"n" + noteLabel + "\" epub:type=\"footnote\">");
+                        notes.write("<p class=\"link\"><a href=\"" + htmlFile + "#r" + noteLabel +
+                                        "\">" + note.title + "</a></p>");
+                        for (int j = note.start + 1; j < note.end; j++)
+                            notes.write(notesInput.get(j));
+                        notes.write("</div>");
+
+                        notePos = text.indexOf("<note ", pos);
+                    } while (notePos != -1);
+
+                    output += text.substring(pos);
+                    html.write(output);
+                }
+                else html.write(text);
+            }
             for (int i = marker.get(marker.size() - 1) + 1; i < input.size(); i++ )
-                xhtml.write(input.get(i));
-            xhtml.close();
+                html.write(input.get(i));
+            html.close();
+            if (notes != null) {
+                for (int i = marker.get(marker.size() - 1) + 1; i < input.size(); i++ )
+                    notes.write(input.get(i));
+                notes.close();
+            }
         }
+
+        content.write("</manifest>");
+        content.write("<spine toc=\"ncx\">");
+        for (int i = 1; i < marker.size() - meta - 1; i++) {
+            String fName = String.format("%04d", i);
+            content.write("<itemref idref=\"" + fName + "\"/>");
+        }
+        content.write("</spine>");
+        content.write("<guide>");
+        content.write("<reference type=\"cover\" href=\"0001.html\" title=\"Cover\"/>");
+        content.write("</guide>");
+        content.write("</package>");
+        content.close();
+
     }
 
     private static List<String> readFileToList(String filename) {
@@ -224,12 +336,30 @@ public class EpubMaker {
         }
     }
 
-    public static String readMarker(String s) {
+    public static String readMarker(String s, boolean notes, int line) {
+        int i = s.indexOf("-->");
+        if (i == -1) {
+            String fatal = notes ? "Notes fatal" : "Fatal";
+            System.out.println(fatal + ": line " + line + ": invalid marker.");
+            System.exit(-8);
+        }
         return s.substring(4, s.indexOf("-->"));
     }
 
     public static String extension(String s) {
         return s.substring(s.lastIndexOf('.') + 1).toLowerCase();
+    }
+
+    public static String getAttribute(String s) {
+        int i = s.indexOf(":");
+        if (i == -1) return "";
+        return s.substring(0, i).trim();
+    }
+
+    public static String getValue(String s) {
+        int i = s.indexOf(":");
+        if (i == -1) return "";
+        return s.substring(i + 1).trim();
     }
 
 }

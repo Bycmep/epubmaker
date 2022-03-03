@@ -23,7 +23,7 @@ public class FWriter {
 
     public void write(String s) {
         try {
-            w.write(s + "\n");
+            w.write(s.trim() + "\n");
         } catch (IOException e) {
             System.out.println("IO error: " + filename);
             System.exit(-5);
