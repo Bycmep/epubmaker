@@ -36,7 +36,6 @@ public class Notes {
                         note.end = j;
                         note.title = s[1];
                         if (label.isEmpty()) Err.fatal2("note label is empty");
-                        if (note.title.isEmpty()) Err.fatal2("note title is empty");
                         if (markers.containsKey(label)) Err.fatal2("note label is not unique");
                         markers.put(label, note);
                     } else {
@@ -47,8 +46,5 @@ public class Notes {
             }
         }
     }
-
-
-
 
 }

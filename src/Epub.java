@@ -45,17 +45,19 @@ public class Epub {
             if (noteNumEnd == -1) Err.fatal2("error in note tag");
             String noteLabel = text.substring(notePos + 10, noteNumEnd).trim();
             if (noteLabel.isEmpty()) Err.fatal2("note label not found");
+            int noteEnd = text.indexOf("</note>", noteNumEnd + 1);
+            if (noteEnd == -1) Err.fatal2("note tag is not closed");
+            String noteLink = text.substring(noteNumEnd + 2, noteEnd);
+            if (noteLink.isEmpty()) Err.fatal2("note link is empty");
             EpubMaker.Note note = notes.markers.get(noteLabel);
             if (note == null) Err.fatal2("no note with such label");
             else {
                 if (note.isUsed) Err.fatal2("note was already referenced");
                 note.isUsed = true;
+                String s = noteLink.trim();
+                if (note.title.isEmpty()) note.title = s.substring(0, 1).toUpperCase() + s.substring(1);
                 notes.markers.replace(noteLabel, note);
             }
-            int noteEnd = text.indexOf("</note>", noteNumEnd + 1);
-            if (noteEnd == -1) Err.fatal2("note tag is not closed");
-            String noteLink = text.substring(noteNumEnd + 2, noteEnd);
-            if (noteLink.isEmpty()) Err.fatal2("note link is empty");
 
             output += text.substring(pos, notePos) +
                     "<a href=\"" + ref + "#n" + noteLabel + "\" id=\"r" +
@@ -239,24 +241,25 @@ public class Epub {
         int[] level = new int[maxChapters + 1];
         int[] fileNum = new int[maxChapters];
         int[] line = new int[maxChapters];
-        int maxLevel = 0;
+        int maxLevel = 1;
         int chapters = 0;
         Err.file = "main.xhtml";
 
+        int currentLevel = 1;
         for (int part = 1; part <= maxChapters; part++) {
             int l = book.marker.get(part);
             String[] mark = Parse.marker(book.text.get(l));
             if (!mark[0].isEmpty()) {
-                int lv = 1;
                 if (!mark[1].isEmpty()) {
                     try {
-                        lv = Integer.parseInt(mark[1]);
+                        currentLevel = Integer.parseInt(mark[1]);
+                        if (maxLevel < currentLevel) maxLevel = currentLevel;
                     } catch (NumberFormatException e) {
                         Err.line = l + 1;
                         Err.fatal2("cannot parse toc level");
                     }
                 }
-                level[chapters] = lv;
+                level[chapters] = currentLevel;
                 title[chapters] = mark[0];
                 fileNum[chapters] = part;
                 line[chapters] = l;

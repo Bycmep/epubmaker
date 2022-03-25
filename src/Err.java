@@ -20,5 +20,4 @@ public class Err {
         System.exit(-1);
     }
 
-
 }
