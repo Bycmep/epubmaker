@@ -19,13 +19,13 @@ public class Epub {
             for (int i = book.marker.get(0) + 1; i < book.marker.get(1); i++ )
                 htmlFile.write(book.text.get(i));
             // html file body
+            Kepub.kePara = 1;
             for (int i = book.marker.get(part) + 1; i < book.marker.get(part + 1); i++ ) {
                 String text = book.text.get(i);
-                if (text.contains("<note ")) {
-                    Err.line = i + 1;
-                    htmlFile.write(addNotesLinks(text, part, notes));
-                }
-                else htmlFile.write(text);
+                Err.line = i + 1;
+                if (text.contains("<note ")) text = addNotesLinks(text, part, notes);
+                if (EpubMaker.kepub) text = Kepub.kepubify(text);
+                htmlFile.write(text);
             }
             // html tail
             for (int i = book.marker.get(book.marker.size() - 1) + 1; i < book.text.size(); i++ )
@@ -37,7 +37,7 @@ public class Epub {
     private static String addNotesLinks(String text, int id, Notes notes) {
         int pos = 0;
         int notePos;
-        String output = "";
+        StringBuilder output = new StringBuilder();
         String ref = (id == -1) ? "" : String.format("x%04d.xhtml", id);
 
         while ((notePos = text.indexOf("<note id=\"", pos)) != -1) {
@@ -59,9 +59,9 @@ public class Epub {
                 notes.markers.replace(noteLabel, note);
             }
 
-            output += text.substring(pos, notePos) +
-                    "<a href=\"" + ref + "#n" + noteLabel + "\" id=\"r" +
-                    noteLabel + "\" epub:type=\"noteref\">" + noteLink + "</a>";
+            output.append(text, pos, notePos).append("<a href=\"").append(ref).append("#n").
+                    append(noteLabel).append("\" id=\"r").append(noteLabel).append("\" epub:type=\"noteref\">").
+                    append(noteLink).append("</a>");
             pos = noteEnd + 7;
 
             // queue writing the note to notes file
@@ -75,8 +75,8 @@ public class Epub {
             }
             else notes.queue.add(qNote);
         }
-        output += text.substring(pos);
-        return output;
+        output.append(text.substring(pos));
+        return output.toString();
     }
 
     public static void addNotes(Notes notes, String dir) {
