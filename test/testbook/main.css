@@ -1,0 +1,51 @@
+p {
+    margin: 0;
+    font-size: 1em;
+    text-align: justify;
+    text-indent: 1.5em;
+    font-family: serif;
+}
+p.title {
+    text-indent: 0;
+    font-weight: bold;
+    font-family: sans-serif;
+}
+p.chapter {
+    font-size: 1.5em;
+    margin: 0.5em 0;
+    text-align: left;
+}
+p.part {
+    font-size: 2em;
+    margin: 3em 0;
+    text-align: center;
+}
+note, a { /* <note> tag will be changed to <a> after processing */
+    text-decoration: underline;
+}
+div.note { /* div of the class note will be generated for every footnote */
+	page-break-after: always;
+}
+p.link { /* p of the class link will be generated as every footnote's heading */
+	text-indent: 0;
+	text-align: left;
+	margin: 0.5em 0;
+}
+p.link + p {
+	text-indent: 0;
+}
+img.fullpage {
+    height: 100%;
+}
+img.left {
+    float: left;
+    margin: 0.2em 0.8em 0.2em 0;
+}
+img.center {
+    display: block;
+    margin: 0.2em auto;
+}
+img.right {
+    float: right;
+    margin: 0.2em 0 0.2em 0.8em;
+}
